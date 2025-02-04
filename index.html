@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch PDF Generator</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .container {
+            width: 80%;
+            margin: 0 auto;
+        }
+        .upload-section, .generate-section, .send-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .upload-section input, .generate-section button, .send-section button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+        }
+        .upload-section input[type="file"] {
+            width: auto;
+        }
+        .alert {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            color: #fff;
+            display: none;
+        }
+        .alert-success {
+            background-color: #4CAF50;
+        }
+        .alert-error {
+            background-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Batch PDF Generator & Email Sender</h1>
+
+        <!-- Alert Messages -->
+        <div id="alert-message" class="alert"></div>
+
+        <!-- Upload Template Section -->
+        <div class="upload-section">
+            <h3>Upload Template</h3>
+            <input type="file" id="template-file" accept=".docx" />
+            <button id="upload-template">Upload Template</button>
+        </div>
+
+        <!-- Upload Data Section -->
+        <div class="upload-section">
+            <h3>Upload Data</h3>
+            <input type="file" id="data-file" accept=".xlsx, .xls" />
+            <button id="upload-data">Upload Data</button>
+        </div>
+
+        <!-- Generate PDFs Section -->
+        <div class="generate-section">
+            <h3>Generate PDFs</h3>
+            <input type="text" id="template-name" placeholder="Template File Name" />
+            <input type="text" id="data-file-name" placeholder="Data File Name" />
+            <button id="generate-pdfs">Generate PDFs</button>
+        </div>
+
+        <!-- Send Emails Section -->
+        <div class="send-section">
+            <h3>Send Emails</h3>
+            <button id="send-emails" disabled>Send Emails</button>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            let pdfPaths = [];
+
+            // Show alert message
+            function showAlert(message, type) {
+                $('#alert-message').text(message).removeClass().addClass(`alert alert-${type}`).fadeIn();
+                setTimeout(function () {
+                    $('#alert-message').fadeOut();
+                }, 3000);
+            }
+
+            // Upload Template
+            $('#upload-template').on('click', function () {
+                const templateFile = $('#template-file')[0].files[0];
+                if (templateFile) {
+                    const formData = new FormData();
+                    formData.append('file', templateFile);
+
+                    $.ajax({
+                        url: '/upload_template',
+                        type: 'POST',
+                        data: formData,
+                        contentType: false,
+                        processData: false,
+                        success: function (response) {
+                            showAlert('Template uploaded successfully!', 'success');
+                        },
+                        error: function () {
+                            showAlert('Error uploading template.', 'error');
+                        }
+                    });
+                } else {
+                    showAlert('Please select a template file to upload.', 'error');
+                }
+            });
+
+            // Upload Data
+            $('#upload-data').on('click', function () {
+                const dataFile = $('#data-file')[0].files[0];
+                if (dataFile) {
+                    const formData = new FormData();
+                    formData.append('file', dataFile);
+
+                    $.ajax({
+                        url: '/upload_data',
+                        type: 'POST',
+                        data: formData,
+                        contentType: false,
+                        processData: false,
+                        success: function (response) {
+                            showAlert('Data uploaded successfully!', 'success');
+                        },
+                        error: function () {
+                            showAlert('Error uploading data.', 'error');
+                        }
+                    });
+                } else {
+                    showAlert('Please select a data file to upload.', 'error');
+                }
+            });
+
+            // Generate PDFs
+            $('#generate-pdfs').on('click', function () {
+                const templateName = $('#template-name').val();
+                const dataFileName = $('#data-file-name').val();
+
+                if (templateName && dataFileName) {
+                    $.ajax({
+                        url: '/generate_pdfs',
+                        type: 'POST',
+                        data: {
+                            template_name: templateName,
+                            data_file_name: dataFileName
+                        },
+                        success: function (response) {
+                            if (response.pdf_paths) {
+                                pdfPaths = response.pdf_paths;
+                                $('#send-emails').prop('disabled', false);  // Enable the Send Emails button
+                                showAlert('PDFs generated successfully!', 'success');
+                            } else {
+                                showAlert('Error generating PDFs.', 'error');
+                            }
+                        },
+                        error: function () {
+                            showAlert('Error generating PDFs.', 'error');
+                        }
+                    });
+                } else {
+                    showAlert('Please provide both template and data file names.', 'error');
+                }
+            });
+
+            // Send Emails
+            $('#send-emails').on('click', function () {
+                if (pdfPaths.length > 0) {
+                    $.ajax({
+                        url: '/send_emails',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ pdf_paths: pdfPaths, data_file_name: $('#data-file-name').val() }),
+                        success: function (response) {
+                            showAlert('Emails sent successfully!', 'success');
+                            pdfPaths = [];  // Clear the pdf paths
+                            $('#send-emails').prop('disabled', true);  // Disable the Send Emails button
+                        },
+                        error: function () {
+                            showAlert('Error sending emails.', 'error');
+                        }
+                    });
+                } else {
+                    showAlert('No PDFs generated. Please generate PDFs first.', 'error');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
